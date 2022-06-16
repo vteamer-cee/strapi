@@ -6,11 +6,9 @@ import Option from './Option';
 
 import flattenTree from './utils/flattenTree';
 import getOpenValues from './utils/getOpenValues';
+import getValuesToClose from './utils/getValuesToClose';
 
 const hasParent = option => !option.parent;
-
-const hasParentOrMatchesValue = (option, value) =>
-  option.value === value || option.parent === value;
 
 const SelectTree = ({ options: defaultOptions, maxDisplayDepth, defaultValue, ...props }) => {
   const flatDefaultOptions = useMemo(() => flattenTree(defaultOptions), [defaultOptions]);
@@ -20,21 +18,34 @@ const SelectTree = ({ options: defaultOptions, maxDisplayDepth, defaultValue, ..
 
   useEffect(() => {
     if (openValues.length === 0) {
-      setOptions(optionsFiltered);
+      setOptions(flatDefaultOptions.filter(option => option.parent === undefined));
+    } else {
+      const nextOptions = flatDefaultOptions.reduce((acc, option) => {
+        if (!openValues.includes(option.value)) {
+          return acc;
+        }
+
+        const values = getOpenValues(flatDefaultOptions, option);
+
+        values.forEach(value => {
+          const options = flatDefaultOptions.filter(
+            option => option.value === value || option.parent === value
+          );
+          options.forEach(option => acc.push(option));
+        });
+
+        return acc;
+      }, []);
+      const nextOptionsUnique = [...new Set(nextOptions)];
+
+      setOptions(nextOptionsUnique);
     }
-
-    openValues.forEach(value => {
-      const filtered = flatDefaultOptions.filter(
-        option => hasParentOrMatchesValue(option, value) || hasParent(option)
-      );
-
-      setOptions(filtered);
-    });
   }, [openValues, flatDefaultOptions, optionsFiltered]);
 
   const handleToggle = value => {
     if (openValues.includes(value)) {
-      setOpenValues(prev => prev.filter(prevData => prevData !== value));
+      const valuesToClose = getValuesToClose(flatDefaultOptions, value);
+      setOpenValues(prev => prev.filter(prevData => !valuesToClose.includes(prevData)));
     } else {
       setOpenValues(prev => [...prev, value]);
     }
